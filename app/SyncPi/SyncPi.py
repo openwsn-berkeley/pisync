@@ -17,9 +17,7 @@ import traceback
 import threading
 import RPi.GPIO as GPIO
 import math
-import smbus
 import time
-import os
 
 from SmartMeshSDK.IpMoteConnector       import IpMoteConnector
 from SmartMeshSDK.ApiException          import APIError
@@ -113,110 +111,31 @@ class MoteClock(object):
             time.sleep((time_to_wakeup-self.time())*0.8)
 
 
-class Sonar:
-    def __init__(self, address):
-        self.i2c = smbus.SMBus(1)
-        # The address in hex, look it up in i2cdetect -y 1 if you're unsure
-        self.address = address
-
-    def __str__(self):
-        return str(hex(self.address))
-
-    def send_signal(self):
-        self.i2c.write_byte_data(self.address, 0, 92)
-
-    def receive_signal_us(self):
-        self.i2c.write_byte_data(self.address, 0, 88)
-
-    def send_and_receive_signal_us(self):
-        self.i2c.write_byte_data(self.address, 0, 82)
-        time.sleep(0.08)
-        result = self.read_result_from_buffer()
-
-
-    def read_result_from_buffer(self):
-        high = (self.i2c.read_word_data(self.address, 2)) & 0xFF
-        low = self.i2c.read_word_data(self.address, 3)
-        result = (high<<8) + low
-        print("result: {} us -> {:.2f} cm".format(result, (result/10.**4)*340.))
-
-        return result
-
-    def change_address(self, new_address):
-        self.i2c.write_byte_data(self.address, 0, 0xA0)
-        time.sleep(0.005)
-        self.i2c.write_byte_data(self.address, 0, 0xAA)
-        time.sleep(0.005)
-        self.i2c.write_byte_data(self.address, 0, 0xA5)
-        time.sleep(0.005)
-        self.i2c.write_byte_data(self.address, 0, new_address<<1)
-        self.address = new_address
-
-
-
-
 if __name__ == "__main__":
     clock = MoteClock(sync_rate=2.123)
+    loop_period = 0.5
 
-    if False:
-        try:
-            clock.start()
+    try:
+        clock.start()
+        next_loop = math.ceil(clock.time())
 
-            pin = 21
-            GPIO.setmode(GPIO.BCM)
-            GPIO.setup(pin, GPIO.OUT)
-            pin_state = int(clock.time()) % 2 == 0
+        pin = 21
+        GPIO.setmode(GPIO.BCM)
+        GPIO.setup(pin, GPIO.OUT)
+        pin_state = int(clock.time()) % 2 == 0
 
-            sonar = Sonar(0x70)
-            role = os.environ['SONAR_ROLE']
-            print("---> SONAR_ROLE: {}".format(role))
+        while True:
+            print "-  Pint toggled at instant {:.6f}".format(clock.time())
+            GPIO.output(pin, pin_state)
+            pin_state = not pin_state
 
-            while True:
-                print "-  Pint toggled at instant {:.6f}".format(clock.time())
-                GPIO.output(pin, pin_state)
-                pin_state = not pin_state
-                clock.sleep_until(math.ceil(clock.time()))
+            next_loop += loop_period
+            clock.sleep_until(next_loop)
 
-                if role == "sender":
-                    sonar.send_and_receive_signal_us()
-                elif role == "receiver":
-                    sonar.receive_signal_us()
-                    time.sleep(0.08)
-                    sonar.read_result_from_buffer()
-
-        except KeyboardInterrupt:
-            clock.stop()
-            print 'Script ended normally.'
-
-        except:
-            traceback.print_exc()
-            print 'Script ended with an error'
-
-
-    def test_sleep_functions():
-        iterations = 20
-        sleep_time = 1
-
+    except KeyboardInterrupt:
         clock.stop()
+        print 'Script ended normally.'
 
-        time_accumulated = 0
-        for i in range(iterations):
-            initial_time = clock.time()
-            time_accumulated -= time.time()
-            time.sleep(0.2)
-            clock.sleep_until(initial_time+sleep_time)
-            time_accumulated += time.time()
-
-        print("time avg: {} s, deviation: {} uS".format(time_accumulated/iterations, (time_accumulated/iterations-1)*10**6))
-
-
-        time_accumulated = 0
-        for i in range(iterations):
-            initial_time = clock.time()
-            time_accumulated -= time.time()
-            time.sleep(0.2)
-            time.sleep(initial_time + sleep_time - clock.time())
-            time_accumulated += time.time()
-            print "."
-
-        print("time avg: {} s, deviation: {} uS".format(time_accumulated/iterations, (time_accumulated/iterations-1)*10**6))
+    except:
+        traceback.print_exc()
+        print 'Script ended with an error'
