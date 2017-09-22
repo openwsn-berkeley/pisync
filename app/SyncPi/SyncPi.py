@@ -23,13 +23,12 @@ from SmartMeshSDK.IpMoteConnector       import IpMoteConnector
 from SmartMeshSDK.ApiException          import APIError
 
 
-# ============================ main ============================================
+# ============================ classes =========================================
 
 class MoteClock(object):
-    UDP_PORT_NUMBER = 60000
-    MINIMUM_SLEEP_TIME = 5.8/10.**(5)
+    MINIMUM_SLEEP_TIME = 5.8/10.**(5) # sleeping less than this amount of time is useless as the sleep-wakeup routine takes at least this amount of time
 
-    def __init__(self, sync_rate):
+    def __init__(self, sync_rate): # sync_rate is the rate at which the Raspberry Pi asks the mote the current network timestamp
         self.sync_rate = sync_rate
         self.offset = 0
         self.keep_thread_alive = False
@@ -37,9 +36,11 @@ class MoteClock(object):
         print 'MoteClock from SyncPi'
 
         self.moteconnector = IpMoteConnector.IpMoteConnector()
-        # self.serialport = raw_input("Enter the serial API port of SmartMesh IP Mote (e.g. COM15): ")
 
-        self.serialport = "/dev/serial/by-id/usb-Dust_Networks_Dust_Huron-if03-port0"
+        self.serialport = raw_input("Enter the serial API port of SmartMesh IP Mote (e.g. COM15): ")
+        # On linux the port is probably this one below, so just comment the line above and uncomment the one below
+        # self.serialport = "/dev/serial/by-id/usb-Dust_Networks_Dust_Huron-if03-port0"
+
         print "- connect to the mote's serial port: {}".format(self.serialport)
 
         self.moteconnector.connect({'port': self.serialport})
@@ -53,17 +54,6 @@ class MoteClock(object):
             elif res.state == 5:
                 break
             time.sleep(1)
-
-        try:
-            # open a socket
-            res = self.moteconnector.dn_openSocket(0)
-            self.socketId = res.socketId
-
-            # bind socket to a UDP port
-            self.moteconnector.dn_bindSocket(self.socketId, self.UDP_PORT_NUMBER)
-        except APIError:
-            print "APIError when opening and binding socket. Try resetting the mote"
-            raise
 
     def __del__(self):
         self.stop()
@@ -94,7 +84,6 @@ class MoteClock(object):
         self.thread.start()
 
     def stop(self):
-        res = self.moteconnector.dn_closeSocket(self.socketId)
         self.moteconnector.disconnect()
         self.keep_thread_alive = False
 
@@ -107,9 +96,15 @@ class MoteClock(object):
         time.sleep(seconds)
 
     def sleep_until(self, time_to_wakeup):
-        while time_to_wakeup - self.time() > self.MINIMUM_SLEEP_TIME: # this constant is the minumum time a sleep needs to execute, even with a 1 uS argument
-            time.sleep((time_to_wakeup-self.time())*0.8)
+        # This function receives a network timestamp as argument and halts code execution up to that timestamp.
+        # This is done by sleeping a fraction of the required time, waking up, recalculating the required sleep time and sleeping again
+        # up to the point where its too close to the final wakeup time
 
+        while time_to_wakeup - self.time() > self.MINIMUM_SLEEP_TIME: # this constant is the minimum time a sleep needs to execute, even with a 1 uS argument
+            time.sleep((time_to_wakeup-self.time())*0.8) # this 0.8 factor doesn't really affect the performance, it could be anything from 0.1 to 0.9
+
+
+# ============================ main ============================================
 
 if __name__ == "__main__":
     clock = MoteClock(sync_rate=2.123)
@@ -122,7 +117,7 @@ if __name__ == "__main__":
         pin = 21
         GPIO.setmode(GPIO.BCM)
         GPIO.setup(pin, GPIO.OUT)
-        pin_state = int(clock.time()) % 2 == 0
+        pin_state = int(clock.time()) % 2 == 0 # just a small trick to make sure both pins are in the same phase
 
         while True:
             print "-  Pint toggled at instant {:.6f}".format(clock.time())

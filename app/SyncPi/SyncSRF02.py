@@ -19,11 +19,11 @@ import smbus
 import time
 import os
 
-# ============================ main ============================================
-
+# ============================ classes =========================================
 
 class SRF02(object):
     SOUND_SPEED  = 340.0
+
     INCHES       = 0
     CENTIMETERS  = 1
     MICROSECONDS = 2
@@ -112,6 +112,9 @@ class SRF02(object):
             time.sleep(0.5)
 
         self.SOUND_SPEED = 2 * 10**4 * accumulated_distance_cm / accumulated_time_us
+
+
+# ============================ main ============================================
 
 
 if __name__ == "__main__":
