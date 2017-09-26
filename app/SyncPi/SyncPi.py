@@ -37,9 +37,9 @@ class MoteClock(object):
 
         self.moteconnector = IpMoteConnector.IpMoteConnector()
 
-        self.serialport = raw_input("Enter the serial API port of SmartMesh IP Mote (e.g. COM15): ")
+        # self.serialport = raw_input("Enter the serial API port of SmartMesh IP Mote (e.g. COM15): ")
         # On linux the port is probably this one below, so just comment the line above and uncomment the one below
-        # self.serialport = "/dev/serial/by-id/usb-Dust_Networks_Dust_Huron-if03-port0"
+        self.serialport = "/dev/serial/by-id/usb-Dust_Networks_Dust_Huron-if03-port0"
 
         print "- connect to the mote's serial port: {}".format(self.serialport)
 
@@ -100,27 +100,40 @@ class MoteClock(object):
         # This is done by sleeping a fraction of the required time, waking up, recalculating the required sleep time and sleeping again
         # up to the point where its too close to the final wakeup time
 
-        while time_to_wakeup - self.time() > self.MINIMUM_SLEEP_TIME: # this constant is the minimum time a sleep needs to execute, even with a 1 uS argument
-            time.sleep((time_to_wakeup-self.time())*0.8) # this 0.8 factor doesn't really affect the performance, it could be anything from 0.1 to 0.9
+        sleep_factor = 0.8 # this 0.8 factor doesn't really affect the performance as long as it's anything from 0.1 to 0.9
+        next_sleep_duration = (time_to_wakeup - self.time())*sleep_factor
+
+        while next_sleep_duration > self.MINIMUM_SLEEP_TIME: # this constant is the minimum time a sleep needs to execute, even with a 1 uS argument
+            time.sleep(next_sleep_duration)
+            next_sleep_duration = (time_to_wakeup - self.time())*sleep_factor
+
+
 
 
 # ============================ main ============================================
 
 if __name__ == "__main__":
-    clock = MoteClock(sync_rate=2.123)
+    try:
+        lock = os.open("lock", os.O_CREAT | os.O_EXCL)
+    except OSError:
+        print "--- Script already in execution! If you think this is an error delete the file 'lock' from this folder\n\n"
+        raise
+
+    clock = MoteClock(sync_rate=30)
     loop_period = 0.5
 
     try:
         clock.start()
-        next_loop = math.ceil(clock.time())
+        next_loop = math.ceil(clock.time()) + 0.25 # just a offset, doesn't change much
 
         pin = 21
         GPIO.setmode(GPIO.BCM)
         GPIO.setup(pin, GPIO.OUT)
-        pin_state = int(clock.time()) % 2 == 0 # just a small trick to make sure both pins are in the same phase
+        pin_state = int(next_loop) % 2 == 0 # just a small trick to make sure both pins are in the same phase
 
         while True:
-            print "-  Pint toggled at instant {:.6f}".format(clock.time())
+            # print "-  Pint {} at instant {:.6f}".format(['HIGH', 'LOW '][pin_state], clock.time())
+            print "{}, {:.6f}".format(['HIGH', 'LOW '][pin_state], clock.time())
             GPIO.output(pin, pin_state)
             pin_state = not pin_state
 
@@ -129,8 +142,11 @@ if __name__ == "__main__":
 
     except KeyboardInterrupt:
         clock.stop()
+        GPIO.cleanup()
+        os.remove("lock")
         print 'Script ended normally.'
-
     except:
         traceback.print_exc()
+        GPIO.cleanup()
+        os.remove("lock")
         print 'Script ended with an error'
