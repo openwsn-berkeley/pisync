@@ -129,45 +129,6 @@ class Communicator(object):
             traceback.print_exc()
             print "Communicator subprocess ended with error"
 
-    # def _loop(self):
-    #     self._init_mote()
-    #     print "- Polling mote for timestamp every {}s".format(self.sync_rate)
-    #
-    #     try:
-    #         while True:
-    #             self._sync()
-    #             time.sleep(self.sync_rate)
-    #
-    #     except KeyboardInterrupt:
-    #         print "Communicator subprocess ended normally"
-    #     except:
-    #         traceback.print_exc()
-    #         print "Communicator subprocess ended with error"
-    #
-    #     self.moteconnector.disconnect()
-
-    # def _init_mote(self):
-    #     print 'MoteClock from SyncPi'
-    #     self.moteconnector = IpMoteConnector.IpMoteConnector()
-    #
-    #     # self.serialport = raw_input("Enter the serial API port of SmartMesh IP Mote (e.g. COM15): ")
-    #     # On linux the port is probably this one below, so just comment the line above and uncomment the one below
-    #     self.serialport = "/dev/serial/by-id/usb-Dust_Networks_Dust_Huron-if03-port0"
-    #
-    #     print "- connect to the mote's serial port: {}".format(self.serialport)
-    #
-    #     self.moteconnector.connect({'port': self.serialport})
-    #
-    #     while True:
-    #         res = self.moteconnector.dn_getParameter_moteStatus()
-    #         print "   current mote state: {0}".format(res.state)
-    #
-    #         if res.state == 1:
-    #             res = self.moteconnector.dn_join()
-    #         elif res.state == 5:
-    #             break
-    #         time.sleep(1)
-
     def _sync(self, rpi_time, elapsed_seconds):
         self.results_queue.put({'rpi': rpi_time, 'gps': elapsed_seconds})
 
@@ -285,7 +246,6 @@ class MoteClock(object):
                 print("sleeping {} s".format(next_sleep_duration))
             time.sleep(next_sleep_duration)
             next_sleep_duration = (time_to_wakeup - self.time())*sleep_factor
-
 
 
 # ============================ main ============================================
