@@ -22,6 +22,7 @@ import Queue
 import time
 import serial
 import traceback
+import logger
 
 import RPi.GPIO as GPIO
 from SmartMeshSDK.IpMoteConnector import IpMoteConnector
@@ -34,40 +35,59 @@ class TimeSource(object):
     __metaclass__ = ABCMeta
     KILL_PROCESS = "kill_process"
 
-    def __init__(self, synchronization_rate):
+    def __init__(self, synchronization_rate, logger_queue=None):
         self.synchronization_rate = synchronization_rate
 
         self.results_queue = multiprocessing.Queue()
         self.commands_queue = multiprocessing.Queue()
         self.data_source_process = multiprocessing.Process(target=self._data_source_loop)
         self.data_source_process.daemon = True
+        self.logger_queue = logger_queue
 
     def __del__(self):
         self.stop()
 
     def start(self):
+        self.log("Starting TimeSource object")
         self.data_source_process.start()
 
     def stop(self):
+        self.log("Stopping TimeSource object", logger.WARNING)
         self.commands_queue.put(self.KILL_PROCESS)
 
     def get_sync_data(self, timeout=0):
         try:
-            return self.results_queue.get(timeout=timeout)
+            sync_data = self.results_queue.get(timeout=timeout)
+            self.log("Got from sync_data_queue: {}".format(sync_data))
+            return sync_data
         except Queue.Empty:
             return None
 
     def _put_sync_data(self, rpi_time, elapsed_seconds):
-        self.results_queue.put({'rpi': rpi_time, 'source': elapsed_seconds})
+        sync_data = {'rpi': rpi_time, 'source': elapsed_seconds}
+        self.log("Putting sync data on queue: {}".format(sync_data))
+        self.results_queue.put(sync_data)
 
     @abstractmethod
     def _data_source_loop(self):
         pass
 
+    def log(self, message, level=logger.DEBUG):
+        name = "TIME_SOURCE"
+        if self.logger_queue is None:
+            print("{} - {} - {} - {}".format(time.asctime(), name, level, message))
+        else:
+            item = {
+                "name": name,
+                "level": level,
+                "message": "[" + name + "] " + message
+            }
+            self.logger_queue.put(item)
+
 
 class MoteSource(TimeSource):
-    def __init__(self, synchronization_rate):
-        super(MoteSource, self).__init__(synchronization_rate)
+    def __init__(self, synchronization_rate, logger_queue=None):
+        super(MoteSource, self).__init__(synchronization_rate, logger_queue)
 
     def _init_mote(self):
         print 'MoteClock from SyncPi'
@@ -91,33 +111,59 @@ class MoteSource(TimeSource):
                 break
             time.sleep(1)
 
-    def _data_source_loop(self):
+        self.log("Mote successfully connected")
+
+    def _query_mote(self):
+        self.log("Querying mote...")
         rpi_time = time.time()
         response = self.moteconnector.send(['getParameter', 'time'], {})
         network_time = response['utcSecs'] + response['utcUsecs']/10.**6
 
+        self.log("Mote response: networktime: {}. rpi_time: {}".format(network_time, rpi_time))
         self._put_sync_data(rpi_time, network_time)
+
+    def _data_source_loop(self):
+        self._init_mote()
+        print "- Polling mote for timestamp every {}s".format(self.synchronization_rate)
+
+        try:
+            while True:
+                self._query_mote()
+                self.log("Sleeping {} s before next sync".format(self.synchronization_rate))
+                time.sleep(self.synchronization_rate)
+
+        except KeyboardInterrupt:
+            self.log("Registered keyboard interrupt", logger.WARNING)
+            print "Communicator subprocess ended normally"
+            raise
+        except:
+            traceback.print_exc()
+            self.log("Unexpected error!\n" + traceback.format_exc(), logger.ERROR)
+            print "Communicator subprocess ended with error"
+            raise
+
+        self.moteconnector.disconnect()
+        self.log("Mote disconnected")
 
 
 class NTPSource(TimeSource):
     def _data_source_loop(self):
-        pass
-
-    def get_sync_data(self, timeout=0):
-        now = time.time()
-        return {
-            'rpi': now,
-            'source': now
-        }
+        while True:
+            time.sleep(self.synchronization_rate)
+            now = time.time()
+            self._put_sync_data(now, now)
+            self.log("_put_sync_data: {}".format(now))
 
 
 class GPSSource(TimeSource):
-    def __init__(self, synchronization_rate, interrupt_pin=20):
-        super(GPSSource, self).__init__(synchronization_rate)
-        self.last_timestamp = None
-        self.interrupt_pin = interrupt_pin
+    def __init__(self, synchronization_rate, logger_queue=None):
+        super(GPSSource, self).__init__(synchronization_rate, logger_queue=logger_queue)
+        self.last_timestamp_received = None
+        self.last_sync = 0
+        self.interrupt_pin = 20
 
         GPIO.setmode(GPIO.BCM)
+
         GPIO.setup(self.interrupt_pin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
 
     def _data_source_loop(self):
@@ -129,22 +175,31 @@ class GPSSource(TimeSource):
             while True:
                 line = str(ser.readline())
                 if "GPRMC" in line:
-                    line = line.split(',')
-                    hour = int(line[1][0:2])
-                    minute = int(line[1][2:4])
-                    second = int(line[1][4:6])
+                    self.log("Got GPRMC line from gps: {}".format(line.split("\n")[0]))
 
-                    self.last_timestamp = hour*3600 + minute*60 + second
+                    line = line.split(',')
+                    self.last_timestamp_received = int(line[9] + line[1].split(".")[0])
+                    self.log("GPS line converted to timestamp {}".format(self.last_timestamp_received))
 
         except KeyboardInterrupt:
+            self.log("Registered keyboard interrupt", logger.WARNING)
             print "Communicator subprocess ended normally"
+            raise
         except:
             traceback.print_exc()
+            self.log("Unexpected error!\n" + traceback.format_exc(), logger.ERROR)
             print "Communicator subprocess ended with error"
             raise
 
     def pps_callback(self, _):
         rpi_time = time.time()
+        self.log("PPS calback. rpi_time: {}".format(rpi_time))
 
-        if self.last_timestamp is not None and self.last_timestamp % self.synchronization_rate == 0:
-            self._put_sync_data(rpi_time, self.last_timestamp)
+        if self.last_timestamp_received is not None and\
+                                self.last_sync is not None and\
+                                self.last_timestamp_received - self.last_sync >= self.synchronization_rate:
+            self.log("Sync time! last_ts_received: {}, last_sync: {}, sync_rate: {}".format(
+                self.last_timestamp_received, self.last_sync, self.synchronization_rate
+            ))
+            self.last_sync = self.last_timestamp_received
+            self._put_sync_data(rpi_time, self.last_timestamp_received)
