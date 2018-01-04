@@ -23,6 +23,7 @@ import time
 import serial
 import traceback
 import logger
+import datetime
 
 import RPi.GPIO as GPIO
 from SmartMeshSDK.IpMoteConnector import IpMoteConnector
@@ -156,15 +157,20 @@ class NTPSource(TimeSource):
 
 
 class GPSSource(TimeSource):
-    def __init__(self, synchronization_rate, logger_queue=None):
+    def __init__(self, synchronization_rate, logger_queue=None, pps_mirror_pin=26):
         super(GPSSource, self).__init__(synchronization_rate, logger_queue=logger_queue)
         self.last_timestamp_received = None
         self.last_sync = 0
         self.interrupt_pin = 20
+        self.last_pps = None
+        self.pps_mirror_pin = pps_mirror_pin
 
         GPIO.setmode(GPIO.BCM)
 
         GPIO.setup(self.interrupt_pin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+
+        if isinstance(self.pps_mirror_pin, int):
+            GPIO.setup(self.pps_mirror_pin, GPIO.OUT)
 
     def _data_source_loop(self):
         GPIO.add_event_detect(self.interrupt_pin, GPIO.FALLING, callback=self.pps_callback)
@@ -178,7 +184,17 @@ class GPSSource(TimeSource):
                     self.log("Got GPRMC line from gps: {}".format(line.split("\n")[0]))
 
                     line = line.split(',')
-                    self.last_timestamp_received = int(line[9] + line[1].split(".")[0])
+                    day = int(line[9][0:2])
+                    month = int(line[9][2:4])
+                    year = 2000 + int(line[9][4:6])
+
+                    hour = int(line[1][0:2])
+                    minute = int(line[1][2:4])
+                    second = int(line[1][4:6])
+
+                    epoch = int(datetime.datetime(year, month, day, hour, minute, second).strftime("%s"))
+
+                    self.last_timestamp_received = epoch
                     self.log("GPS line converted to timestamp {}".format(self.last_timestamp_received))
 
         except KeyboardInterrupt:
@@ -192,8 +208,16 @@ class GPSSource(TimeSource):
             raise
 
     def pps_callback(self, _):
+        if self.pps_mirror_pin is not None:
+            GPIO.output(self.pps_mirror_pin, 1)
+
         rpi_time = time.time()
         self.log("PPS calback. rpi_time: {}".format(rpi_time))
+
+        if self.last_pps is not None and rpi_time - self.last_pps > 1.5:
+            self.log("Shit, we missed a PPS! Tdiff: {}".format(rpi_time-self.last_pps), logger.WARNING)
+
+        self.last_pps = rpi_time
 
         if self.last_timestamp_received is not None and\
                                 self.last_sync is not None and\
@@ -203,3 +227,7 @@ class GPSSource(TimeSource):
             ))
             self.last_sync = self.last_timestamp_received
             self._put_sync_data(rpi_time, self.last_timestamp_received)
+
+
+        if self.pps_mirror_pin is not None:
+            GPIO.output(self.pps_mirror_pin, 0)

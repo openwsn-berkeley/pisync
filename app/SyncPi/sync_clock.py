@@ -93,9 +93,20 @@ class SyncClock(object):
         print "---- get_sync_data_thread ended"
 
     def _calculate_drift_coefficient(self, source_time, rpi_time):
-        self.log("Going to calculate new drift coef. rpi_time: {}, source_time: {}, last_sync_rpi: {}, last_sync_source: {}".format(
-                rpi_time, source_time, self.last_sync_data["rpi"], self.last_sync_data["source"]
-            ), logger.DEBUG)
+        self.log("Going to calculate new drift coef"
+                 ". rpi_time: {}"
+                 ", last_sync_rpi: {}"
+                 ", diff_rpi: {}"
+                 ", source_time: {}"
+                 ", last_sync_source: {}"
+                 ", diff_source: {}".format(
+                    rpi_time,
+                    self.last_sync_data["rpi"],
+                    rpi_time - self.last_sync_data["rpi"],
+                    source_time,
+                    self.last_sync_data["source"],
+                    source_time - self.last_sync_data["source"]
+                ), logger.DEBUG)
         try:
             instant_drift_coefficient = (rpi_time - self.last_sync_data["rpi"]) / (source_time - self.last_sync_data["source"])
             # print("New drift: {}".format((1-instant_drift_coefficient)*10**6))
