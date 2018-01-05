@@ -48,10 +48,11 @@ void loop() {
 
 void interrupt_routine() {
     static long pps_counter = 0;
+    uint32_t now = micros();
 
     pps_counter++;
     if (pps_counter % SYNCHRONIZATION_RATE == 0) {
-        new_sync_local_timestamp = micros();
+        new_sync_local_timestamp = now;
         new_sync_source_timestamp = pps_counter * 1000000;
         time_to_sync = true;
     }
@@ -66,7 +67,7 @@ void flip_pin(int pin) {
 
     static int counter;
     static bool led_status = false;
-    static uint32_t next_wakeup = ((time()/1000000) % 1 + 1) * 1000000; // random value
+    static uint32_t next_wakeup = ((time()/1000000) % 1 + 1) * 1000000 + 100000; // added small offter of 100ms so that the sync routine doesn't happen at the same time as the flip
 
     if (time() - next_wakeup + DELTA > DELTA) { // This DELTA is needed because of the micros() rollover each ~71 minutes
         digitalWrite(LED_PIN, led_status);
