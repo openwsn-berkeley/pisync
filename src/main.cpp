@@ -5,11 +5,10 @@
 #define SYNCHRONIZATION_RATE 10
 #define alpha 0.3
 #define beta 0.2
-#define SLEEP_FACTOR 0.8
-#define MINIMUM_SLEEP_TIME 0 // TODO: review this value
+// #define alpha 1
+// #define beta 1
 #define FLIP_DELAY 500000
 
-volatile bool led_status = 0;
 volatile float drift_coef = 1;
 volatile float ema_drift_coef = 1;
 volatile uint32_t last_sync_local_timestamp;
@@ -22,18 +21,21 @@ void interrupt_routine();
 void sleep_until(uint32_t);
 uint32_t time();
 void flip_pin(int);
+void check_sync();
 
 void setup() {
     Serial.begin(115200);
     attachInterrupt(digitalPinToInterrupt(PPS_PIN), interrupt_routine, FALLING);
 
     pinMode(LED_PIN, OUTPUT);
+    Serial.println("Setup complete");
 }
 
 void loop() {
     // Serial.println("Hey!");
     // delay(1000);
     flip_pin(LED_PIN);
+    check_sync();
 
     // Tasks:
         // Get pps signal as interrupt
@@ -55,26 +57,41 @@ void interrupt_routine() {
     }
 }
 
-void sleep_until(uint32_t wakeup_time) {
-    uint32_t next_sleep_duration = uint32_t ((wakeup_time - micros())*SLEEP_FACTOR);
-    while (next_sleep_duration > MINIMUM_SLEEP_TIME && wakeup_time > micros()){
-        Serial.println(next_sleep_duration);
-        delayMicroseconds(next_sleep_duration);
-        next_sleep_duration = uint32_t (wakeup_time - micros())*SLEEP_FACTOR;
-    }
-}
-
 uint32_t time() {
     return (micros()-last_sync_local_timestamp)/drift_coef + last_sync_source_timestamp;
 }
 
 void flip_pin(int pin) {
-    static uint32_t next_wakeup = micros() + 500000;
-    if (time() > next_wakeup) {
+    static const uint32_t DELTA = 10000000;
+
+    static int counter;
+    static bool led_status = false;
+    static uint32_t next_wakeup = ((time()/1000000) % 1 + 1) * 1000000; // random value
+
+    if (time() - next_wakeup + DELTA > DELTA) { // This DELTA is needed because of the micros() rollover each ~71 minutes
         digitalWrite(LED_PIN, led_status);
         led_status = !led_status;
         next_wakeup += 500000;
-        Serial.print("Flip! ");
-        Serial.println(led_status);
+        // Serial.print("Flip! ");
+        // Serial.print(counter++);
+        // Serial.print(" time: ");
+        // Serial.println(time());
+    }
+}
+
+void check_sync() {
+    if (time_to_sync) {
+        float instant_drift_coef;
+
+        instant_drift_coef = (float (new_sync_local_timestamp - last_sync_local_timestamp)) / ((float)(new_sync_source_timestamp - last_sync_source_timestamp));
+        ema_drift_coef = ema_drift_coef*(1-alpha) + instant_drift_coef*alpha;
+        drift_coef     = ema_drift_coef*(1-beta)  + instant_drift_coef*beta;
+
+        last_sync_local_timestamp = new_sync_local_timestamp;
+        last_sync_source_timestamp = new_sync_source_timestamp;
+        time_to_sync = false;
+
+        // Serial.print("Drift: ");
+        // Serial.println((drift_coef-1)*1000000);
     }
 }
