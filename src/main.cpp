@@ -3,34 +3,35 @@
 
 #define PPS_PIN 2
 #define LED_PIN 13
-#define SYNCHRONIZATION_RATE 10
+#define SYNCHRONIZATION_RATE 5
 #define alpha 0.3
 #define beta 0.2
 // #define alpha 1
 // #define beta 1
 #define FLIP_DELAY 500000
 
-volatile float drift_coef = 1;
-volatile float ema_drift_coef = 1;
-volatile uint32_t last_sync_local_timestamp;
-volatile uint32_t new_sync_local_timestamp;
-volatile uint32_t last_sync_source_timestamp;
-volatile uint32_t new_sync_source_timestamp;
-volatile bool time_to_sync;
+volatile double drift_coef = 1.0;
+volatile double ema_drift_coef = 1.0;
+volatile bool time_to_sync = false;
+volatile bool did_first_sync = false;
 volatile bool led_pin_state = false;
+
+volatile uint32_t local_delta;
+volatile uint32_t source_delta;
 
 void interrupt_routine();
 void sleep_until(uint32_t);
 uint32_t time();
 void flip_pin_handler();
 void check_sync();
+uint32_t micros_mod();
 
 void setup() {
     Serial.begin(115200);
     attachInterrupt(digitalPinToInterrupt(PPS_PIN), interrupt_routine, FALLING);
     Timer3.attachInterrupt(flip_pin_handler).start(FLIP_DELAY);
     pinMode(LED_PIN, OUTPUT);
-    Serial.println("Setup complete");
+    Serial.println("Setup complete\n\n");
 }
 
 void loop() {
@@ -39,62 +40,80 @@ void loop() {
 }
 
 void interrupt_routine() {
-    static long pps_counter = 0;
-    uint32_t now = micros();
+    static uint32_t pps_counter = 0;
+    static uint32_t last_sync = 0;
+    uint32_t now = micros_mod();
+    double elapsed_useconds_rounded;
 
     pps_counter++;
-    if (pps_counter % SYNCHRONIZATION_RATE == 0) {
-        new_sync_local_timestamp = now;
-        new_sync_source_timestamp = pps_counter * 1000000;
+    if (pps_counter % SYNCHRONIZATION_RATE == 1) {
+        if (last_sync == 0) {
+            last_sync = now;
+            return;
+        }
+
+        // DEBUGGING
+        if (now < last_sync) {
+            Serial.println("-- Did rollover");
+        }
+
+        elapsed_useconds_rounded = round(((now - last_sync))/1000000.)*1000000;
+
+        if (elapsed_useconds_rounded == 0) {
+            return;
+        }
+
+        // DEBUGGING
+        Serial.print("Elapsed seconds: ");
+        Serial.println(elapsed_useconds_rounded/1000000);
+
+        local_delta = now - last_sync;
+        source_delta = elapsed_useconds_rounded;
+
+        last_sync = now;
         time_to_sync = true;
 
-    } else if (pps_counter % SYNCHRONIZATION_RATE == 1) {
+    } else if (pps_counter % SYNCHRONIZATION_RATE == 2) {
         Timer3.stop();
-        led_pin_state = false;
-        Timer3.start(FLIP_DELAY/drift_coef);
+        Timer3.start(FLIP_DELAY*drift_coef);
+
+        if (led_pin_state == true) {
+            flip_pin_handler();
+        }
+        Serial.print("New delay: ");
+        Serial.println(FLIP_DELAY*drift_coef);
+
     }
 }
 
-// uint32_t time() {
-//     return (micros()-last_sync_local_timestamp)/drift_coef + last_sync_source_timestamp;
-// }
-
-// void flip_pin(int pin) {
-//     static const uint32_t DELTA = 10000000;
-//
-//     static int counter;
-//     static bool led_status = false;
-//     static uint32_t next_wakeup = ((time()/1000000) % 1 + 1) * 1000000 + 100000; // added small offter of 100ms so that the sync routine doesn't happen at the same time as the flip
-//
-//     if (time() - next_wakeup + DELTA > DELTA) { // This DELTA is needed because of the micros() rollover each ~71 minutes
-//         digitalWrite(LED_PIN, led_status);
-//         led_status = !led_status;
-//         next_wakeup += 500000;
-//         // Serial.print("Flip! ");
-//         // Serial.print(counter++);
-//         // Serial.print(" time: ");
-//         // Serial.println(time());
-//     }
-// }
-
 void flip_pin_handler() {
+    static int counter = 0;
+    counter++;
+
     led_pin_state = !led_pin_state;
     digitalWrite(LED_PIN, led_pin_state);
 }
 
 void check_sync() {
     if (time_to_sync) {
-        float instant_drift_coef;
+        double instant_drift_coef;
 
-        instant_drift_coef = (float (new_sync_local_timestamp - last_sync_local_timestamp)) / ((float)(new_sync_source_timestamp - last_sync_source_timestamp));
+        instant_drift_coef = ((double) local_delta) / ((double) source_delta);
         ema_drift_coef = ema_drift_coef*(1-alpha) + instant_drift_coef*alpha;
         drift_coef     = ema_drift_coef*(1-beta)  + instant_drift_coef*beta;
 
-        last_sync_local_timestamp = new_sync_local_timestamp;
-        last_sync_source_timestamp = new_sync_source_timestamp;
-        time_to_sync = false;
+        Serial.print("Instant drift: ");
+        Serial.println((instant_drift_coef-1)*1000000);
+        Serial.print("Local delta: ");
+        Serial.println(local_delta);
+        Serial.print("Source delta: ");
+        Serial.println(source_delta);
 
-        // Serial.print("Drift: ");
-        // Serial.println((drift_coef-1)*1000000);
+        time_to_sync = false;
     }
+}
+
+uint32_t micros_mod() {
+    uint32_t delta = -20*1000*1000;
+    return micros() + delta;
 }
