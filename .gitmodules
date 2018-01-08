@@ -1,0 +1,3 @@
+[submodule "smartmesh_c_library"]
+	path = smartmesh_c_library
+	url = https://github.com/dustcloud/sm_clib.git
