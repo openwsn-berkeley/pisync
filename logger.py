@@ -44,37 +44,3 @@ def listener_process(queue, configurer, filename):
             import sys, traceback
             print('Whoops! Problem:',)
             traceback.print_exc(file=sys.stderr)
-
-
-
-# def worker_process(queue, configurer):
-#     configurer(queue)
-#     name = multiprocessing.current_process().name
-#     print('Worker started: %s' % name)
-#     for i in range(10):
-#         time.sleep(random())
-#         logger = logging.getLogger(choice(LOGGERS))
-#         level = choice(LEVELS)
-#         message = choice(MESSAGES)
-#         log(message, level, logger)
-#     print('Worker finished: %s' % name)
-#
-#
-#
-#
-# def main():
-#     queue = start_listener()
-#     workers = []
-#     for i in range(10):
-#         worker = multiprocessing.Process(target=worker_process,
-#                                          args=(queue, worker_configurer))
-#         workers.append(worker)
-#         worker.start()
-#     for w in workers:
-#         w.join()
-#     queue.put_nowait(None)
-#     # listener.join()
-#
-#
-# if __name__ == '__main__':
-#     main()

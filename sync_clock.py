@@ -27,7 +27,7 @@ class SyncClock(object):
         self.max_sleep = max_sleep
         self.logger_queue = logger_queue
 
-        self.log("TIME SOURCE: {}".format(time_source))
+        # self.log("TIME SOURCE: {}".format(time_source))
         print(" =========== TIME SOURCE: {} ===========".format(time_source))
 
         if time_source == "NTP":
@@ -52,10 +52,10 @@ class SyncClock(object):
 
         try:
             while not flags['kill']:
-                sync_data = self.time_source.get_sync_data(timeout=0.1)
+                sync_data = self.time_source.get_sync_data(timeout=1)
 
                 if sync_data is not None:
-                    self.log("Got sync data! {}".format(sync_data))
+                    # self.log("Got sync data! {}".format(sync_data))
 
                     source_time = sync_data['source']
                     rpi_time = sync_data['rpi']
@@ -67,8 +67,8 @@ class SyncClock(object):
                     # Print something if the interval between two synchronizations is more than 10% off
                     if (time.time() - last_sync_timestamp) > self.synchronization_rate*1.1 or \
                                             time.time() - last_sync_timestamp < self.synchronization_rate*0.9:
-                        print("Sync out of time! Last sync was {} seconds ago".format(time.time()-last_sync_timestamp))
-                        self.log("Sync out of time! Last sync was {} seconds ago".format(time.time() - last_sync_timestamp))
+                        print("Sync out of time! Last sync was {} seconds ago. Sync_rate: {}".format(time.time()-last_sync_timestamp, self.synchronization_rate))
+                        self.log("Sync out of time! Last sync was {} seconds ago".format(time.time() - last_sync_timestamp), logger.WARNING)
                     last_sync_timestamp = rpi_time
 
                     flags['did_first_sync'] = True
@@ -91,45 +91,45 @@ class SyncClock(object):
         print "---- get_sync_data_thread ended"
 
     def _calculate_drift_coefficient(self, source_time, rpi_time):
-        self.log("Going to calculate new drift coef"
-                 ". rpi_time: {}"
-                 ", last_sync_rpi: {}"
-                 ", diff_rpi: {}"
-                 ", source_time: {}"
-                 ", last_sync_source: {}"
-                 ", diff_source: {}".format(
-                    rpi_time,
-                    self.last_sync_data["rpi"],
-                    rpi_time - self.last_sync_data["rpi"],
-                    source_time,
-                    self.last_sync_data["source"],
-                    source_time - self.last_sync_data["source"]
-                ), logger.DEBUG)
+        # self.log("Going to calculate new drift coef"
+        #          ". rpi_time: {}"
+        #          ", last_sync_rpi: {}"
+        #          ", diff_rpi: {}"
+        #          ", source_time: {}"
+        #          ", last_sync_source: {}"
+        #          ", diff_source: {}".format(
+        #             rpi_time,
+        #             self.last_sync_data["rpi"],
+        #             rpi_time - self.last_sync_data["rpi"],
+        #             source_time,
+        #             self.last_sync_data["source"],
+        #             source_time - self.last_sync_data["source"]
+        #         ), logger.DEBUG)
         try:
             instant_drift_coefficient = (rpi_time - self.last_sync_data["rpi"]) / (source_time - self.last_sync_data["source"])
             # print("New drift: {}".format((1-instant_drift_coefficient)*10**6))
             self.ema_drift_coefficient = self.ema_drift_coefficient * (1 - self.EMA_ALPHA) + instant_drift_coefficient * self.EMA_ALPHA
             self.drift_coefficient = self.ema_drift_coefficient * (1 - self.EMA_BETA) + instant_drift_coefficient * self.EMA_BETA
 
-            self.log("drift_coefficient: {}, ema_drift_coefficient: {}, instant_drift_coefficient: {}".format(
-                self.drift_coefficient, self.ema_drift_coefficient, instant_drift_coefficient
-            ))
+            # self.log("drift_coefficient: {}, ema_drift_coefficient: {}, instant_drift_coefficient: {}".format(
+            #     self.drift_coefficient, self.ema_drift_coefficient, instant_drift_coefficient
+            # ))
 
         except ZeroDivisionError:
             self.log("Zero division error!", logger.WARNING)
             pass
 
     def start(self):
-        self.log("Starting clock...")
+        # self.log("Starting clock...")
         self.get_sync_data_thread.start()
         self.time_source.start()
 
         while not self.get_sync_data_thread.flags["did_first_sync"]:
             print("Waiting for first sync...")
             time.sleep(1)
-            self.log("Waiting for first sync")
+            # self.log("Waiting for first sync")
 
-        self.log("Clock started and first sync done!")
+        # self.log("Clock started and first sync done!")
 
     def stop(self):
         self.log("Clock closing!", logger.WARNING)
@@ -140,7 +140,7 @@ class SyncClock(object):
 
     def time(self):
         network_time = (time.time() - self.last_sync_data['rpi']) / self.drift_coefficient + self.last_sync_data['source']
-        self.log("Network time queried: {:.6f}".format(network_time))
+        # self.log("Network time queried: {:.6f}".format(network_time))
         return network_time
 
     def sleep(self, seconds):
@@ -161,9 +161,9 @@ class SyncClock(object):
                 self.log("Sleep duration greater than max_sleep", logger.ERROR)
                 raise Exception("Sleep duration is too long! {}s".format(next_sleep_duration))
 
-            self.log("Going to sleep {} seconds".format(next_sleep_duration))
+            # self.log("Going to sleep {} seconds".format(next_sleep_duration))
             time.sleep(next_sleep_duration)
-            self.log("Woke up from sleep")
+            # self.log("Woke up from sleep")
             next_sleep_duration = (time_to_wakeup - self.time())*sleep_factor
 
     def log(self, message, level=logger.DEBUG):
