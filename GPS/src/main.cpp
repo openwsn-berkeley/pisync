@@ -13,7 +13,6 @@
 volatile double drift_coef = 1.0;
 volatile double ema_drift_coef = 1.0;
 volatile bool time_to_sync = false;
-volatile bool did_first_sync = false;
 volatile bool led_pin_state = false;
 
 volatile uint32_t local_delta;
@@ -28,8 +27,8 @@ uint32_t micros_mod();
 
 void setup() {
     Serial.begin(115200);
-    attachInterrupt(digitalPinToInterrupt(PPS_PIN), interrupt_routine, FALLING);
-    Timer3.attachInterrupt(flip_pin_handler).start(FLIP_DELAY);
+    attachInterrupt(digitalPinToInterrupt(PPS_PIN), interrupt_routine, FALLING); // PPS interrupt
+    Timer3.attachInterrupt(flip_pin_handler).start(FLIP_DELAY); // Pin flip interrupt
     pinMode(LED_PIN, OUTPUT);
     Serial.println("Setup complete\n\n");
 }
