@@ -6,13 +6,13 @@
 #define PPS_PIN 2
 #define SYNCHRONIZATION_RATE 10
 
-volatile double drift_coef = 0;
+volatile double drift_coef    = 0;
 volatile uint32_t pps_counter = 0;
-volatile bool sync_pps = true;
+volatile bool sync_pps        = true;
 
-NanoClock nano_clock = NanoClock();
-PinFlipper pin_flipper = PinFlipper();
-Drifter drifter = Drifter();
+NanoClock nano_clock          = NanoClock();
+PinFlipper pin_flipper        = PinFlipper();
+Drifter drifter               = Drifter();
 
 void interrupt_routine();
 void sync_pps_counter();
@@ -38,7 +38,9 @@ void loop() {
     // flip_pin(LED_PIN);
     // check_sync();
     double new_drift = drifter.processSyncData();
-    if (new_drift != -1) {
+    if (new_drift != 0) {
+        // Serial.print("New drift: ");
+        // Serial.println((new_drift-1)*1000000);
         drift_coef = new_drift;
     }
 
@@ -52,10 +54,11 @@ void interrupt_routine() {
     double source_delta;
 
     // Serial.println("PPS signal!");
-    Serial.println(pps_counter);
+    // Serial.println(pps_counter);
 
     pps_counter++;
     if (pps_counter % SYNCHRONIZATION_RATE == 1) {
+        // Serial.println("First case");
         if (last_sync == 0) {
             last_sync = now;
             return;
@@ -74,9 +77,12 @@ void interrupt_routine() {
         // time_to_sync = true;
 
     } else if (pps_counter % SYNCHRONIZATION_RATE == 2) {
+        // Serial.println("Second case");
         pin_flipper.reset();
+        // pin_flipper.scheduleReset(100); // TODO: test this and then go back to previous line implementation
         pin_flipper.setDriftRate(drift_coef);
     } else if (pps_counter % SYNCHRONIZATION_RATE == 3) {
+        // Serial.println("Third case");
         // Serial.println("Recalibrate pps_counter");
         sync_pps = true;
     }
@@ -92,7 +98,6 @@ void check_pps_counter_sync() {
 
 void sync_pps_counter() {
     // Serial.println("Beginning sync_pps_counter");
-    bool pps_counter_set = false;
     int position_counter = 0;
     char nmea_gprmc[] = "SGPRMC";
     bool is_gprms = false;
@@ -103,7 +108,7 @@ void sync_pps_counter() {
             ch = Serial3.read();
             // Serial.print(ch);
 
-            if (position_counter < 6 & ch != nmea_gprmc[position_counter]) {
+            if ((position_counter < 6) & (ch != nmea_gprmc[position_counter])) {
                 position_counter = 0;
             }
 

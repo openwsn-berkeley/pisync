@@ -1,16 +1,22 @@
 #include "PinFlipper.h"
+#include "SimpleTimer.h"
 
 bool state = false;
 
-void TC2_Handler()
-{
+// void TC2_Handler() {
+//     // Serial.println("TC2_Handler");
+//     TC_GetStatus(TC0, 2);
+//     PinFlipper::flip();
+// }
+
+void flip_handler() {
     // Serial.println("TC2_Handler");
-    TC_GetStatus(TC0, 2);
     PinFlipper::flip();
 }
 
 void PinFlipper::setup() {
     pinMode(LED_PIN, OUTPUT);
+    SimpleTimer::setCallback(2, flip_handler);
 }
 
 void PinFlipper::setDriftRate(double drift_rate) {
@@ -25,22 +31,26 @@ void PinFlipper::setDriftRate(double drift_rate) {
 
     uint32_t flip_delay_adjusted = static_cast<uint32_t> (drift_rate * FLIP_DELAY);
 
-    Tc *tc = TC0;
-    uint32_t channel = 2;
-    IRQn_Type irq = TC2_IRQn;
+    SimpleTimer::configure(2, 2, flip_delay_adjusted);
+    SimpleTimer::start(2);
 
-    pmc_set_writeprotect(false);
-    pmc_enable_periph_clk((uint32_t)irq);
-    TC_Configure(tc, channel, TC_CMR_WAVE | TC_CMR_WAVSEL_UP_RC | TC_CMR_TCCLKS_TIMER_CLOCK1);
-    uint32_t rc = flip_delay_adjusted;
-    // Serial.println(rc);
-    TC_SetRA(tc, channel, rc/2); //50% high, 50% low
-    TC_SetRC(tc, channel, rc);
-
-    TC_Start(tc, channel);
-    tc->TC_CHANNEL[channel].TC_IER=TC_IER_CPCS;
-    tc->TC_CHANNEL[channel].TC_IDR=~TC_IER_CPCS;
-    NVIC_EnableIRQ(irq);
+    // Tc *tc = TC0; // <--------------------------------------------------------------------------------------------
+    // uint32_t channel = 2; // <--------------------------------------------------------------------------------------------
+    // IRQn_Type irq = TC2_IRQn; // <--------------------------------------------------------------------------------------------
+    //
+    // pmc_set_writeprotect(false);
+    // pmc_enable_periph_clk((uint32_t)irq);
+    // TC_Configure(tc, channel, TC_CMR_WAVE | TC_CMR_WAVSEL_UP_RC | TC_CMR_TCCLKS_TIMER_CLOCK1); // <--------------------------------------------------------------------------------------------
+    // uint32_t rc = flip_delay_adjusted; // <--------------------------------------------------------------------------------------------
+    // // Serial.println(rc);
+    // TC_SetRA(tc, channel, rc/2); //50% high, 50% low
+    // TC_SetRC(tc, channel, rc);
+    //
+    // tc->TC_CHANNEL[channel].TC_IER=TC_IER_CPCS;
+    // tc->TC_CHANNEL[channel].TC_IDR=~TC_IER_CPCS;
+    // NVIC_ClearPendingIRQ(irq);
+    // NVIC_EnableIRQ(irq);
+    // TC_Start(tc, channel);
 
     // Serial.println("Flip timer configured!");
 }
@@ -66,4 +76,15 @@ void PinFlipper::flip() {
     } else {
         PinFlipper::setLow();
     }
+}
+
+void scheduledResetHandler() {
+    PinFlipper::reset();
+    // SimpleTimer::stop(3);
+}
+
+void PinFlipper::scheduleReset(uint32_t usecondsToGo) {
+    // SimpleTimer::setCallback(3, scheduledResetHandler);
+    // SimpleTimer::configure(3, 2, usecondsToGo*42);
+    // SimpleTimer::start(3);
 }

@@ -28,6 +28,7 @@ public:
     static void setup();
     static void setDriftRate(double drift_rate);
     static void reset();
+    static void scheduleReset(uint32_t usecondsToGo);
     // uint32_t getClockTicks();
     // uint32_t ticksToNanos(uint32_t ticks);
     // uint64_t ticksToNanos(uint64_t ticks);
