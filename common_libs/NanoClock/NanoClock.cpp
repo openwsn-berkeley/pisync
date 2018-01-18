@@ -1,9 +1,10 @@
 #include "NanoClock.h"
 
-// void TC7_Handler()
-// {
-//     TC_GetStatus(TC2, 1);
-// }
+void TC8_Handler()
+{
+    // Serial.println("TC8_Handler");
+    TC_GetStatus(TC2, 2);
+}
 
 void NanoClock::start() {
     Tc *tc = TC2;
@@ -14,7 +15,7 @@ void NanoClock::start() {
     pmc_enable_periph_clk((uint32_t)irq);
     TC_Configure(tc, channel, TC_CMR_WAVE | TC_CMR_WAVSEL_UP_RC | TC_CMR_TCCLKS_TIMER_CLOCK1);
     uint32_t rc = UINT32_MAX;
-    Serial.println(rc);
+    // Serial.println(rc);
     TC_SetRA(tc, channel, rc/2); //50% high, 50% low
     TC_SetRC(tc, channel, rc);
 
