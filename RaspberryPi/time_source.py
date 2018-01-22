@@ -7,8 +7,8 @@ import sys
 # ============================ adjust path =====================================
 
 here = sys.path[0]
-sys.path.insert(0, os.path.join(here, '..', '..', 'libs'))
-sys.path.insert(0, os.path.join(here, '..', '..', 'external_libs'))
+sys.path.insert(0, os.path.join(here, '..', 'smartmeshsdk', 'libs'))
+sys.path.insert(0, os.path.join(here, '..', 'smartmeshsdk', 'external_libs'))
 
 
 # ============================ imports =========================================
