@@ -82,7 +82,7 @@ void IpMtWrapper::setup(
 
 void IpMtWrapper::loop() {
     uint8_t byte;
-    TIME_T  currentTime;
+    // TIME_T  currentTime;
 
     // receive and react to HDLC frames
     while (Serial1.available()) {
@@ -91,7 +91,7 @@ void IpMtWrapper::loop() {
 
         // hand over byte to ipmt module
         app_vars.ipmt_uart_rxByte_cb(byte);
-        Serial.print(".");
+        // Serial.print(".");
     }
 }
 
@@ -126,8 +126,7 @@ extern "C" void printBuf(uint8_t* buf, uint8_t bufLen) {
 //=========================== callback functions for ipmt =====================
 
 void dn_ipmt_notif_cb(uint8_t cmdId, uint8_t subCmdId) {
-
-    dn_ipmt_events_nt* dn_ipmt_events_notif;
+    // dn_ipmt_events_nt* dn_ipmt_events_notif;
     dn_ipmt_timeIndication_nt* dn_ipmt_timeIndication_notif;
 
     switch (cmdId) {

@@ -29,10 +29,10 @@ double Drifter::processSyncData() {
 
         // flip_delay_adjusted = static_cast<uint32_t> (FLIP_DELAY*drift_coef);
 
-        Serial.print("Instant drift: ");
-        Serial.println((instant_drift_coef-1)*1000000);
-        Serial.print("Smooth drift: ");
-        Serial.println((drift_coef-1)*1000000);
+        // Serial.print("Instant drift: ");
+        // Serial.println((instant_drift_coef-1)*1000000);
+        // Serial.print("Smooth drift: ");
+        // Serial.println((drift_coef-1)*1000000);
         // Serial.print("Local delta: ");
         // Serial.println(local_delta);
         // Serial.print("Source delta: ");

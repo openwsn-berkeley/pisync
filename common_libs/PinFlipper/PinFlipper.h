@@ -13,7 +13,8 @@
 
 #include "Arduino.h"
 
-#define FLIP_DELAY 21*1000*1000// value in timer ticks with timer @ 32 MHz
+#define FLIP_DELAY 21*1000*1000 // value in timer ticks with timer @ 32 MHz
+// #define FLIP_DELAY 5250000 // value in timer ticks with timer @ 32 MHz
 #define DRIFT_THRESHOLD 0.001 // value in timer ticks with timer @ 32 MHz
 #define LED_PIN 13
 
@@ -28,6 +29,7 @@ public:
     static void setup();
     static void setDriftRate(double drift_rate);
     static void reset();
+    static void scheduleReset(uint32_t usecondsToGo, double drift_rate);
     static void scheduleReset(uint32_t usecondsToGo);
     // uint32_t getClockTicks();
     // uint32_t ticksToNanos(uint32_t ticks);

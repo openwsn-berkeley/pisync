@@ -2,6 +2,8 @@
 #include "SimpleTimer.h"
 
 bool state = false;
+bool reset_drift = false;
+double scheduled_drift_value;
 
 // void TC2_Handler() {
 //     // Serial.println("TC2_Handler");
@@ -58,6 +60,7 @@ void PinFlipper::setDriftRate(double drift_rate) {
 void PinFlipper::reset() {
     PinFlipper::setLow();
     state = false;
+    // Serial.println("Pin reset");
 }
 
 void PinFlipper::setLow() {
@@ -79,12 +82,24 @@ void PinFlipper::flip() {
 }
 
 void scheduledResetHandler() {
+    // Serial.println("Pin reset handler");
     PinFlipper::reset();
-    // SimpleTimer::stop(3);
+    SimpleTimer::stop(3);
+    if (reset_drift) {
+        PinFlipper::setDriftRate(scheduled_drift_value);
+        reset_drift = false;
+    }
 }
 
 void PinFlipper::scheduleReset(uint32_t usecondsToGo) {
-    // SimpleTimer::setCallback(3, scheduledResetHandler);
-    // SimpleTimer::configure(3, 2, usecondsToGo*42);
-    // SimpleTimer::start(3);
+    SimpleTimer::setCallback(3, scheduledResetHandler);
+    SimpleTimer::configure(3, 2, usecondsToGo*42);
+    SimpleTimer::start(3);
+    // Serial.println("Pin reset scheduled");
 }
+
+void PinFlipper::scheduleReset(uint32_t usecondsToGo, double drift_rate) {
+    PinFlipper::scheduleReset(usecondsToGo);
+    reset_drift = true;
+    scheduled_drift_value = drift_rate;
+};
